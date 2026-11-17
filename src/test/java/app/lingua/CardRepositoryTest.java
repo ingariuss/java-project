@@ -23,6 +23,14 @@ class CardRepositoryTest {
     }
 
     @Test
+    void acceptsPipeSeparatedLines() {
+        List<Card> cards = CardRepository.parseTsv("he", "Цвета | וָרֹד | варод | розовый\nЕда|לֶחֶם|лехем|хлеб|\n");
+
+        assertEquals(new Card("he-1", "Цвета", "וָרֹד", "варод", "розовый", ""), cards.get(0));
+        assertEquals("лехем", cards.get(1).transcription());
+    }
+
+    @Test
     void rejectsLinesWithTooFewColumns() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> CardRepository.parseTsv("en", "Еда\tapple\tяблоко"));

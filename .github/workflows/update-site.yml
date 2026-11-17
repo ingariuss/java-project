@@ -1,0 +1,43 @@
+# После каждого изменения слов или кода пересобирает папку docs/ (сайт для телефона)
+name: Обновить сайт
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "pom.xml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Сборка, тесты и обновление docs/
+        run: mvn -B package
+
+      - name: Сохранить обновлённый сайт
+        run: |
+          git add docs
+          if git diff --cached --quiet; then
+            echo "Сайт уже актуален"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Обновить сайт (docs/)"
+          git push

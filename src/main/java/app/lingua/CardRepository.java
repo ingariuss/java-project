@@ -14,7 +14,8 @@ import java.util.Optional;
 /**
  * Хранит языки и карточки. Карточки читаются из TSV-файлов в {@code resources/cards}.
  *
- * <p>Формат строки (через табуляцию): {@code тема  слово  транскрипция  перевод  [пример]}.
+ * <p>Формат строки: {@code тема | слово | транскрипция | перевод | пример}.
+ * Колонки разделяются символом {@code |} или табуляцией; пример можно не писать.
  * Пустые строки и строки, начинающиеся с {@code #}, пропускаются.
  */
 public final class CardRepository {
@@ -50,10 +51,10 @@ public final class CardRepository {
             if (line.isBlank() || line.stripLeading().startsWith("#")) {
                 continue;
             }
-            String[] cols = line.split("\t", -1);
+            String[] cols = line.split(line.contains("\t") ? "\t" : "\\|", -1);
             if (cols.length < 4) {
-                throw new IllegalArgumentException(
-                        "Строка " + (i + 1) + " (" + languageCode + "): нужно минимум 4 колонки через Tab, а найдено " + cols.length);
+                throw new IllegalArgumentException("Строка " + (i + 1) + " (" + languageCode + "): "
+                        + "нужно минимум 4 колонки (тема | слово | транскрипция | перевод), а найдено " + cols.length);
             }
             String example = cols.length > 4 ? cols[4].strip() : "";
             result.add(new Card(

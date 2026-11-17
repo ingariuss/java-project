@@ -285,3 +285,8 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* На телефонах клавиатурные подсказки не нужны */
+@media (hover: none) and (pointer: coarse) {
+  .keys-hint { display: none; }
+}

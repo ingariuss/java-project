@@ -46,6 +46,28 @@
                     </archive>
                 </configuration>
             </plugin>
+            <!-- При mvn package заодно обновляет папку docs/ — статическую версию для GitHub Pages -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>export-static-site</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>app.lingua.App</mainClass>
+                            <arguments>
+                                <argument>--export</argument>
+                                <argument>${project.basedir}/docs</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

@@ -31,10 +31,24 @@ const shuffle = (arr) => {
 
 const sample = (arr, n) => shuffle(arr).slice(0, n);
 
-async function api(path) {
+let staticMode = false;   // true, когда сайт открыт без Java-сервера (например, на GitHub Pages)
+
+async function getJson(path) {
   const res = await fetch(path);
-  if (!res.ok) throw new Error(`Ошибка сервера (${res.status})`);
+  if (!res.ok) throw new Error(`Ошибка загрузки (${res.status})`);
   return res.json();
+}
+
+/** Сначала пробуем Java-сервер, если его нет — берём готовые файлы из папки data/. */
+async function api(path, staticPath) {
+  if (!staticMode) {
+    try {
+      return await getJson(path);
+    } catch {
+      staticMode = true;
+    }
+  }
+  return getJson(staticPath);
 }
 
 /** Озвучка слова голосом браузера. */
@@ -87,7 +101,7 @@ const Progress = {
 /* ---------- Данные ---------- */
 
 async function loadCards(code) {
-  if (!state.cards[code]) state.cards[code] = await api(`/api/cards?lang=${encodeURIComponent(code)}`);
+  if (!state.cards[code]) state.cards[code] = await api(`api/cards?lang=${encodeURIComponent(code)}`, `data/cards-${encodeURIComponent(code)}.json`);
   return state.cards[code];
 }
 
@@ -130,7 +144,7 @@ async function route() {
   try {
     if (!state.languages.length) {
       $app.innerHTML = '<div class="loader">🌸</div>';
-      state.languages = await api('/api/languages');
+      state.languages = await api('api/languages', 'data/languages.json');
     }
     const lang = state.languages.find((l) => l.code === code);
     if (section === 'lang' && lang) {

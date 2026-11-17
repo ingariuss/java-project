@@ -8,7 +8,8 @@ const $app = document.getElementById('app');
 
 const state = {
   languages: [],
-  cards: {},        // code -> [cards]
+  base: {},         // code -> карточки из приложения
+  cards: {},        // code -> все карточки (из приложения + свои)
   category: {},     // code -> выбранная тема
 };
 
@@ -98,11 +99,54 @@ const Progress = {
   },
 };
 
+/* ---------- Свои слова (хранятся в браузере) ---------- */
+
+const MY_TOPIC = 'Мои слова';
+
+const MyWords = {
+  key: (code) => `linguarosa.mywords.${code}`,
+  get(code) {
+    try { return JSON.parse(localStorage.getItem(this.key(code)) || '[]'); } catch { return []; }
+  },
+  save(code, list) {
+    localStorage.setItem(this.key(code), JSON.stringify(list));
+  },
+  upsert(code, card) {
+    const list = this.get(code);
+    const i = list.findIndex((c) => c.id === card.id);
+    if (i >= 0) list[i] = card; else list.push(card);
+    this.save(code, list);
+  },
+  remove(code, id) {
+    this.save(code, this.get(code).filter((c) => c.id !== id));
+  },
+};
+
 /* ---------- Данные ---------- */
 
-async function loadCards(code) {
-  if (!state.cards[code]) state.cards[code] = await api(`api/cards?lang=${encodeURIComponent(code)}`, `data/cards-${encodeURIComponent(code)}.json`);
+function rebuildCards(code) {
+  state.cards[code] = [...(state.base[code] || []), ...MyWords.get(code).map((c) => ({ ...c, custom: true }))];
+  const cat = state.category[code];
+  if (cat && cat !== 'all' && !state.cards[code].some((c) => c.category === cat)) state.category[code] = 'all';
   return state.cards[code];
+}
+
+async function loadCards(code) {
+  if (!state.base[code]) {
+    state.base[code] = await api(`api/cards?lang=${encodeURIComponent(code)}`, `data/cards-${encodeURIComponent(code)}.json`);
+  }
+  return rebuildCards(code);
+}
+
+/** Всплывающее сообщение внизу экрана. */
+function toast(text) {
+  document.querySelectorAll('.toast').forEach((t) => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('hide'), 2200);
+  setTimeout(() => t.remove(), 2700);
 }
 
 function filtered(code) {
@@ -117,6 +161,8 @@ function wordHtml(lang, text, cls = 'word') {
     ? `<div class="${cls} he" dir="rtl" lang="he">${esc(text)}</div>`
     : `<div class="${cls}" lang="${esc(lang.code)}">${esc(text)}</div>`;
 }
+
+const fab = (lang) => `<a class="fab" href="#/lang/${esc(lang.code)}/add" aria-label="Добавить слово" title="Добавить слово">＋</a>`;
 
 const topbar = (title, backHref, extra = '') => `
   <div class="topbar">
@@ -140,7 +186,7 @@ async function route() {
   cleanup = () => {};
   document.querySelectorAll('.hearts').forEach((h) => h.remove());
   window.scrollTo(0, 0);
-  const [section, code, mode] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  const [section, code, mode, arg] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   try {
     if (!state.languages.length) {
       $app.innerHTML = '<div class="loader">🌸</div>';
@@ -149,7 +195,9 @@ async function route() {
     const lang = state.languages.find((l) => l.code === code);
     if (section === 'lang' && lang) {
       await loadCards(lang.code);
-      if (mode && MODES[mode]) MODES[mode].render(lang);
+      if (mode === 'add') renderWordForm(lang);
+      else if (mode === 'edit' && arg) renderWordForm(lang, decodeURIComponent(arg));
+      else if (mode && MODES[mode]) MODES[mode].render(lang);
       else renderLanguage(lang);
     } else {
       renderHome();
@@ -173,15 +221,16 @@ function renderHome() {
     </header>
     <div class="lang-grid">
       ${state.languages.map((l) => {
-        const known = Progress.get(l.code).size;
-        const pct = l.cardCount ? Math.round((known / l.cardCount) * 100) : 0;
+        const total = l.cardCount + MyWords.get(l.code).length;
+        const known = Math.min(Progress.get(l.code).size, total);
+        const pct = total ? Math.round((known / total) * 100) : 0;
         return `
           <a class="lang-card" href="#/lang/${esc(l.code)}">
             <div class="flag">${esc(l.flag)}</div>
             <h2>${esc(l.name)}</h2>
             <p class="native ${l.rtl ? 'he' : ''}" ${l.rtl ? 'dir="rtl"' : ''}>${esc(l.nativeName)}</p>
             <div class="progress"><div style="width:${pct}%"></div></div>
-            <small>Выучено ${known} из ${l.cardCount} · ${pct}%</small>
+            <small>Выучено ${known} из ${total} · ${pct}%</small>
           </a>`;
       }).join('')}
     </div>
@@ -205,6 +254,10 @@ function renderLanguage(lang) {
       <div class="stat"><b>${knownHere}</b><span>уже знаю 💖</span></div>
       <div class="stat"><b>${list.length - knownHere}</b><span>ещё учить</span></div>
     </div>
+    <a class="add-banner" href="#/lang/${esc(lang.code)}/add">
+      <span class="plus">＋</span>
+      <span><b>Добавить слово</b><small>Своё слово сразу появится во всех играх</small></span>
+    </a>
     <div class="section-title">Тема</div>
     <div class="chips">
       ${['all', ...categories].map((c) => `
@@ -217,7 +270,8 @@ function renderLanguage(lang) {
           <div class="icon">${m.icon}</div>
           <div><b>${m.title}</b><span>${m.desc}</span></div>
         </a>`).join('')}
-    </div>`;
+    </div>
+    ${fab(lang)}`;
 
   $app.querySelectorAll('.chip').forEach((btn) => btn.addEventListener('click', () => {
     state.category[lang.code] = btn.dataset.cat;
@@ -491,7 +545,7 @@ function renderType(lang) {
     const c = items[i];
     // Для иврита принимаем и само слово, и транскрипцию русскими буквами
     const answers = [c.word, lang.rtl ? c.transcription : null].filter(Boolean).map(normalize);
-    const hintSource = lang.rtl ? c.transcription : c.word;
+    const hintSource = (lang.rtl && c.transcription) || c.word;
     let hintLen = 0;
     let done = false;
 
@@ -505,7 +559,7 @@ function renderType(lang) {
       </div>
       <form class="type-form" autocomplete="off">
         <input class="type-input" id="answer" ${lang.rtl ? 'dir="auto"' : ''}
-               placeholder="${lang.rtl ? 'на иврите или транскрипцией' : 'введи слово'}" autocapitalize="off" spellcheck="false">
+               placeholder="${lang.rtl ? (c.transcription ? 'на иврите или транскрипцией' : 'на иврите') : 'введи слово'}" autocapitalize="off" spellcheck="false">
         <button class="btn primary" type="submit">OK</button>
       </form>
       <div class="feedback" id="feedback"></div>
@@ -655,10 +709,13 @@ function renderMatch(lang) {
 
 function renderDict(lang) {
   const list = filtered(lang.code);
+  const mine = list.filter((c) => c.custom).length;
   $app.innerHTML = `
     ${topbar('📖 Словарик', `#/lang/${lang.code}`, `<span class="pill">${list.length} слов</span>`)}
-    <input class="search" id="search" placeholder="🔍 Поиск по слову или переводу">
-    <div class="dict" id="dict"></div>`;
+    <input class="search" id="search" type="search" placeholder="🔍 Поиск по слову или переводу">
+    ${mine ? `<p class="counter">Своих слов: ${mine} · нажми ✏️, чтобы изменить или удалить</p>` : ''}
+    <div class="dict" id="dict"></div>
+    ${fab(lang)}`;
 
   const box = $app.querySelector('#dict');
   const draw = (q = '') => {
@@ -666,15 +723,17 @@ function renderDict(lang) {
     const nq = normalize(q);
     const rows = list.filter((c) => !nq || [c.word, c.transcription, c.translation].some((f) => normalize(f).includes(nq)));
     box.innerHTML = rows.length ? rows.map((c) => `
-      <div class="dict-row">
+      <div class="dict-row ${c.custom ? 'mine' : ''}">
         <button class="icon-btn" data-speak="${esc(c.id)}" title="Послушать">🔊</button>
         <div class="main">
           ${wordHtml(lang, c.word, 'w')}
-          <div class="t">${esc(c.transcription)} · ${esc(c.category)}</div>
+          <div class="tr">${esc(c.translation)}</div>
+          <div class="t">${c.transcription ? `${esc(c.transcription)} · ` : ''}${esc(c.category)}</div>
         </div>
-        <div class="tr">${esc(c.translation)}</div>
         <button class="icon-btn" data-known="${esc(c.id)}" title="Отметить как выученное">${known.has(c.id) ? '💖' : '🤍'}</button>
-      </div>`).join('') : '<div class="empty">Ничего не найдено 🌸</div>';
+        ${c.custom ? `<a class="icon-btn" href="#/lang/${esc(lang.code)}/edit/${encodeURIComponent(c.id)}" title="Изменить">✏️</a>` : ''}
+      </div>`).join('') : `<div class="empty">Ничего не найдено 🌸<br><br>
+        <a class="btn primary" href="#/lang/${esc(lang.code)}/add">＋ Добавить слово</a></div>`;
   };
   draw();
 
@@ -689,5 +748,158 @@ function renderDict(lang) {
       Progress.mark(lang.code, id, !isKnown);
       kn.textContent = isKnown ? '🤍' : '💖';
     }
+  });
+}
+
+/* =========================================================
+ *  Добавление и редактирование своих слов
+ * ========================================================= */
+
+function renderWordForm(lang, editId, presetTopic) {
+  const editing = editId ? MyWords.get(lang.code).find((c) => c.id === editId) : null;
+  if (editId && !editing) return emptyScreen(lang, 'Это слово не найдено — возможно, его уже удалили 🌸');
+
+  const categories = [...new Set(state.cards[lang.code].map((c) => c.category))];
+  const currentCat = state.category[lang.code];
+  const defaultCat = editing?.category || presetTopic || (currentCat && currentCat !== 'all' ? currentCat : MY_TOPIC);
+  const langName = lang.code === 'he' ? 'на иврите' : 'по-английски';
+  const back = editing ? `#/lang/${lang.code}/dict` : `#/lang/${lang.code}`;
+
+  $app.innerHTML = `
+    ${topbar(editing ? '✏️ Изменить слово' : '＋ Новое слово', back)}
+    <form class="word-form" autocomplete="off" novalidate>
+      <label class="field">
+        <span>Слово ${langName} <i>*</i></span>
+        <input name="word" required ${lang.rtl ? 'dir="rtl" lang="he" class="he"' : `lang="${esc(lang.code)}"`}
+               placeholder="${lang.rtl ? 'בָּנָנָה' : 'например: orange'}" autocapitalize="off" spellcheck="false">
+        ${lang.rtl ? '<small>Переключи клавиатуру на иврит или вставь слово из переводчика</small>' : ''}
+      </label>
+      <label class="field">
+        <span>Перевод на русский <i>*</i></span>
+        <input name="translation" required placeholder="например: ${lang.rtl ? 'банан' : 'апельсин'}">
+      </label>
+      <label class="field">
+        <span>Как читается <em>(необязательно)</em></span>
+        <input name="transcription" placeholder="${lang.rtl ? 'например: банана' : 'например: [ˈɒrɪndʒ] или оранж'}">
+      </label>
+      <div class="field">
+        <span>Тема</span>
+        <div class="chips topic-chips">
+          ${[...new Set([MY_TOPIC, ...categories, defaultCat])].map((c) => `
+            <button type="button" class="chip ${c === defaultCat ? 'active' : ''}" data-topic="${esc(c)}">${esc(c)}</button>`).join('')}
+          <button type="button" class="chip new-topic" data-topic="">＋ новая тема</button>
+        </div>
+        <input name="newTopic" class="hidden" placeholder="Название новой темы, например: Одежда">
+      </div>
+      <label class="field">
+        <span>Пример фразы <em>(необязательно)</em></span>
+        <input name="example" ${lang.rtl ? 'dir="auto"' : ''} placeholder="${lang.rtl ? 'אֲנִי אוֹהֶבֶת בָּנָנוֹת' : 'например: I like oranges.'}">
+      </label>
+      <div class="form-error" id="form-error"></div>
+      <div class="actions form-actions">
+        ${editing
+          ? `<button class="btn primary big" type="submit">💾 Сохранить</button>
+             <button class="btn soft big" type="button" data-act="delete">🗑️ Удалить</button>`
+          : `<button class="btn primary big" type="submit" data-next="more">💖 Добавить и ещё одно</button>
+             <button class="btn soft big" type="submit" data-next="done">Добавить и выйти</button>`}
+      </div>
+    </form>
+    ${editing ? '' : '<div class="recent" id="recent"></div>'}`;
+
+  const form = $app.querySelector('form');
+  const errorBox = $app.querySelector('#form-error');
+  const newTopicInput = form.elements.newTopic;
+  let topic = defaultCat;
+  let next = 'more';
+
+  if (editing) {
+    ['word', 'translation', 'transcription', 'example'].forEach((f) => { form.elements[f].value = editing[f] || ''; });
+  }
+  form.elements.word.focus();
+
+  form.querySelectorAll('[data-topic]').forEach((chip) => chip.addEventListener('click', () => {
+    form.querySelectorAll('[data-topic]').forEach((c) => c.classList.toggle('active', c === chip));
+    topic = chip.dataset.topic;
+    newTopicInput.classList.toggle('hidden', topic !== '');
+    if (topic === '') newTopicInput.focus();
+  }));
+  form.querySelectorAll('[data-next]').forEach((b) => b.addEventListener('click', () => { next = b.dataset.next; }));
+
+  const showRecent = () => {
+    const box = $app.querySelector('#recent');
+    if (!box) return;
+    const recent = MyWords.get(lang.code).slice(-5).reverse();
+    box.innerHTML = recent.length ? `
+      <div class="section-title">Недавно добавленные</div>
+      <div class="dict">${recent.map((c) => `
+        <div class="dict-row mine">
+          <div class="main">${wordHtml(lang, c.word, 'w')}<div class="tr">${esc(c.translation)}</div></div>
+          <a class="icon-btn" href="#/lang/${esc(lang.code)}/edit/${encodeURIComponent(c.id)}" title="Изменить">✏️</a>
+        </div>`).join('')}
+      </div>` : '';
+  };
+  showRecent();
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = (f) => form.elements[f].value.trim().replace(/\s+/g, ' ');
+    const card = {
+      id: editing?.id || `my-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      category: topic === '' ? v('newTopic') : topic,
+      word: v('word'),
+      transcription: v('transcription'),
+      translation: v('translation'),
+      example: v('example'),
+    };
+    const problem = !card.word ? `Напиши слово ${langName}`
+      : !card.translation ? 'Напиши перевод'
+      : !card.category ? 'Напиши название новой темы'
+      : '';
+    if (problem) {
+      errorBox.textContent = `🌸 ${problem}`;
+      return;
+    }
+    const duplicate = state.cards[lang.code].find((c) => c.id !== card.id && normalize(c.word) === normalize(card.word));
+    if (duplicate && errorBox.dataset.dup !== card.word) {
+      errorBox.dataset.dup = card.word;
+      errorBox.textContent = `Такое слово уже есть («${duplicate.translation}»). Нажми ещё раз, чтобы всё равно сохранить.`;
+      return;
+    }
+    try {
+      MyWords.upsert(lang.code, card);
+    } catch {
+      errorBox.textContent = '😿 Не получилось сохранить: браузер запрещает хранить данные (приватный режим?)';
+      return;
+    }
+    rebuildCards(lang.code);
+
+    if (editing) {
+      toast('Сохранено 💾');
+      location.hash = `#/lang/${lang.code}/dict`;
+    } else if (next === 'done') {
+      toast(`«${esc(card.word)}» добавлено 💖`);
+      location.hash = `#/lang/${lang.code}`;
+    } else {
+      toast(`«${esc(card.word)}» добавлено 💖`);
+      ['word', 'translation', 'transcription', 'example'].forEach((f) => { form.elements[f].value = ''; });
+      errorBox.textContent = '';
+      delete errorBox.dataset.dup;
+      if (topic === '') {
+        // новая тема теперь существует — пусть следующие слова идут туда же
+        renderWordForm(lang, null, card.category);
+        return;
+      }
+      form.elements.word.focus();
+      showRecent();
+    }
+  });
+
+  $app.querySelector('[data-act="delete"]')?.addEventListener('click', () => {
+    if (!confirm(`Удалить слово «${editing.word}»?`)) return;
+    MyWords.remove(lang.code, editing.id);
+    Progress.mark(lang.code, editing.id, false);
+    rebuildCards(lang.code);
+    toast('Слово удалено');
+    location.hash = `#/lang/${lang.code}/dict`;
   });
 }

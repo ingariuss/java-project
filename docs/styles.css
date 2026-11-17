@@ -253,8 +253,9 @@ button { font: inherit; color: inherit; }
 .dict-row .w.he { font-weight: 500; font-size: 22px; }
 .dict-row .t { color: var(--plum-soft); font-size: 14px; }
 .dict-row .main { flex: 1; min-width: 0; }
-.dict-row .tr { font-weight: 700; color: var(--rose-800); text-align: right; }
-.icon-btn { border: none; background: var(--rose-50); border-radius: 12px; width: 38px; height: 38px; cursor: pointer; font-size: 17px; flex: none; }
+.dict-row .tr { font-weight: 700; color: var(--rose-800); }
+.dict-row.mine { border-left: 5px solid var(--rose-400); }
+.icon-btn { display: grid; place-items: center; border: none; background: var(--rose-50); border-radius: 12px; width: 38px; height: 38px; cursor: pointer; font-size: 17px; flex: none; }
 .icon-btn:hover { background: var(--rose-100); }
 
 /* ---------- Result ---------- */
@@ -290,3 +291,54 @@ button { font: inherit; color: inherit; }
 @media (hover: none) and (pointer: coarse) {
   .keys-hint { display: none; }
 }
+
+/* ---------- Добавление слов ---------- */
+.add-banner {
+  display: flex; align-items: center; gap: 14px; margin: 0 0 20px; padding: 16px 18px; border-radius: 20px;
+  color: #fff; background: linear-gradient(135deg, var(--rose-500), var(--rose-700)); box-shadow: var(--shadow);
+  transition: transform .15s;
+}
+.add-banner:hover { transform: translateY(-2px); }
+.add-banner .plus {
+  width: 48px; height: 48px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255, 255, 255, .25); font-size: 30px; font-weight: 800;
+}
+.add-banner b { display: block; font-size: 18px; }
+.add-banner small { opacity: .9; font-size: 14px; }
+
+.fab {
+  position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom));
+  width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; z-index: 40;
+  color: #fff; font-size: 34px; font-weight: 800; line-height: 1;
+  background: linear-gradient(135deg, var(--rose-500), var(--rose-800));
+  box-shadow: 0 10px 26px rgba(214, 51, 108, .45); transition: transform .15s;
+}
+.fab:hover { transform: scale(1.08) rotate(90deg); }
+
+.word-form { background: var(--card); border-radius: 26px; padding: 22px 18px; box-shadow: var(--shadow); }
+.field { display: block; margin-bottom: 18px; }
+.field > span { display: block; font-weight: 800; margin-bottom: 7px; }
+.field i { color: var(--rose-600); font-style: normal; }
+.field em { color: var(--plum-soft); font-weight: 600; font-style: normal; font-size: 14px; }
+.field small { display: block; margin-top: 6px; color: var(--plum-soft); font-size: 13px; }
+.field input {
+  width: 100%; border: 3px solid var(--rose-100); border-radius: 16px; padding: 13px 15px;
+  font: inherit; font-size: 18px; color: var(--plum); background: var(--rose-25); outline: none; transition: border-color .15s;
+}
+.field input.he { font-family: var(--font-he); font-size: 22px; }
+.field input:focus { border-color: var(--rose-500); background: #fff; }
+.topic-chips { margin: 0 0 10px; }
+.chip.new-topic { border-style: dashed; }
+.hidden { display: none !important; }
+.form-error { min-height: 22px; color: var(--berry); font-weight: 700; text-align: center; margin-bottom: 10px; }
+.form-actions .btn.big { max-width: none; }
+.recent { margin-top: 22px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 60;
+  background: var(--plum); color: #fff; padding: 12px 20px; border-radius: 999px; font-weight: 700;
+  box-shadow: var(--shadow); animation: pop .3s; transition: opacity .4s; max-width: calc(100% - 32px); text-align: center;
+}
+.toast.hide { opacity: 0; }
+
+.container { padding-bottom: 110px; }
